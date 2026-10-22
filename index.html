@@ -601,7 +601,7 @@ function filterHrTable() {
   if (!tbody) return;
   var shown = 0;
   var bodyHtml = rows.map(function(r, idx){
-    var nm = (r.name || "").toLowerCase();
+    var nm = String(r.name == null ? "" : r.name).toLowerCase();
     if (q && nm.indexOf(q) === -1) return "";
     if (pf !== "ALL" && r.primary !== pf) return "";
     shown++;
