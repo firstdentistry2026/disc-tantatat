@@ -467,27 +467,43 @@ function checkPin() {
 function loadHrData() {
   var b = document.getElementById("hrBody");
   b.innerHTML = '<p style="color:#64748b;text-align:center;margin-top:2rem">กำลังโหลดข้อมูล…</p>';
-  // JSONP via <script> tag — most reliable for Apps Script Web Apps (handles the 302 redirect + CORS).
-  var cb = "hrCb_" + Date.now();
-  var done = false;
-  var s = document.createElement("script");
-  function cleanup(){ try{ delete window[cb]; }catch(e){ window[cb]=undefined; } if(s && s.parentNode) s.parentNode.removeChild(s); }
-  window[cb] = function(resp) {
-    done = true;
-    try { renderHrTable(resp); } finally { cleanup(); }
-  };
-  s.src = ENDPOINT + "?action=list&callback=" + cb + "&t=" + Date.now();
-  s.onerror = function(){
-    done = true; cleanup();
-    b.innerHTML = '<p style="color:#dc2626;text-align:center;margin-top:2rem">โหลดข้อมูลไม่สำเร็จ กรุณาลองใหม่</p><div style="text-align:center"><button class="submit-btn" onclick="loadHrData()">ลองใหม่</button></div>';
-  };
-  document.body.appendChild(s);
-  setTimeout(function(){
-    if (!done) {
-      cleanup();
-      b.innerHTML = '<p style="color:#dc2626;text-align:center;margin-top:2rem">โหลดข้อมูลช้าผิดปกติ กรุณากด "ลองใหม่"</p><div style="text-align:center"><button class="submit-btn" onclick="loadHrData()">ลองใหม่</button></div>';
-    }
-  }, 12000);
+  var settled = false;
+  function ok(resp){
+    if (settled) return; settled = true;
+    try { renderHrTable(resp); }
+    catch(e){ console.error(e); b.innerHTML = '<p style="color:#dc2626;text-align:center;margin-top:2rem">แสดงผลผิดพลาด: ' + (e && e.message ? e.message : e) + '</p>'; }
+  }
+  function fail(msg){
+    if (settled) return; settled = true;
+    b.innerHTML = '<p style="color:#dc2626;text-align:center;margin-top:2rem">โหลดข้อมูลไม่สำเร็จ'
+      + (msg ? ' (' + msg + ')' : '') + '</p><div style="text-align:center"><button class="submit-btn" onclick="loadHrData()">ลองใหม่</button></div>';
+  }
+
+  // Attempt 1: fetch JSON directly
+  var tried = { fetch:false };
+  fetch(ENDPOINT + "?action=list&t=" + Date.now())
+    .then(function(res){ return res.text(); })
+    .then(function(txt){
+      // response may be pure JSON, or JSONP-wrapped "cb({...})" — strip wrapper if present
+      var jsonStr = txt;
+      var m = txt.match(/^[^({]*\((\{[\s\S]*\})\)\s*;?\s*$/);
+      if (m) jsonStr = m[1];
+      var data = JSON.parse(jsonStr);
+      ok(data);
+    })
+    .catch(function(err){
+      console.warn("fetch failed, trying JSONP", err);
+      // Attempt 2: JSONP via <script>
+      var cb = "hrCb_" + Date.now();
+      window[cb] = function(resp){ try { ok(resp); } finally { try{delete window[cb];}catch(e){} } };
+      var s = document.createElement("script");
+      s.src = ENDPOINT + "?action=list&callback=" + cb + "&t=" + Date.now();
+      s.onerror = function(){ fail("เครือข่าย"); };
+      document.body.appendChild(s);
+    });
+
+  // Safety timeout
+  setTimeout(function(){ if (!settled) fail("หมดเวลา — กดลองใหม่"); }, 15000);
 }
 
 function renderHrTable(resp) {
