@@ -83,8 +83,11 @@
 </div></div>
 <div class="container">
   <div class="card">
-    <label class="label">👤 ชื่อ-นามสกุลผู้ทำแบบประเมิน</label>
-    <input type="text" id="name" placeholder="กรอกชื่อ-นามสกุลของคุณ">
+    <label class="label">👤 ชื่อ-นามสกุล <span style="color:#dc2626">*</span></label>
+    <input type="text" id="name" placeholder="กรอกชื่อ-นามสกุลของคุณ" style="margin-bottom:.9rem">
+    <label class="label">💼 ตำแหน่งที่สมัคร <span style="color:#dc2626">*</span></label>
+    <input type="text" id="position" placeholder="กรอกตำแหน่งที่สมัคร">
+    <p id="infoErr" style="color:#dc2626;font-size:.82rem;margin:.6rem 0 0;display:none">กรุณากรอกชื่อ-นามสกุล และตำแหน่งให้ครบก่อนส่งแบบประเมิน</p>
   </div>
   <div id="boxes"></div>
   <div class="center">
@@ -167,10 +170,18 @@ function computeScores() {
 
 function submitAssessment() {
   if (completed() !== 24) return;
+  const name = (document.getElementById('name').value || '').trim();
+  const position = (document.getElementById('position') ? document.getElementById('position').value : '').trim();
+  const infoErr = document.getElementById('infoErr');
+  if (!name || !position) {
+    if (infoErr) infoErr.style.display = 'block';
+    document.querySelector('.card').scrollIntoView({behavior:'smooth', block:'center'});
+    return;
+  }
+  if (infoErr) infoErr.style.display = 'none';
   const s = computeScores();
   const ranked = ORDER.slice().sort((a,b) => s.diff[b]-s.diff[a]);
-  const name = (document.getElementById('name').value || '').trim();
-  window.__lastSummary = { name: name, primary: ranked[0], secondary: ranked[1], diff: s.diff, most: s.most, least: s.least };
+  window.__lastSummary = { name: name, position: position, primary: ranked[0], secondary: ranked[1], diff: s.diff, most: s.most, least: s.least };
 
   const area = document.getElementById('resultArea');
   area.innerHTML = '<div class="result" style="text-align:center">'
@@ -262,6 +273,7 @@ async function dlPdf() {
 function buildParams(sum) {
   const params = new URLSearchParams();
   params.append("name", sum.name || "");
+  params.append("position", sum.position || "");
   params.append("primary", sum.primary);
   params.append("secondary", sum.secondary);
   params.append("D", String(sum.diff.D));
@@ -559,6 +571,7 @@ function renderHrTable(resp) {
   var head = '<tr>'
     + '<th style="padding:.8rem .6rem;color:#fff !important;background:#5b6a86 !important;border:none;font-size:.8rem">เวลา</th>'
     + '<th style="padding:.8rem .6rem;color:#fff !important;background:#5b6a86 !important;border:none;font-size:.8rem">ชื่อ-นามสกุล</th>'
+    + '<th style="padding:.8rem .6rem;color:#fff !important;background:#5b6a86 !important;border:none;font-size:.8rem">ตำแหน่ง</th>'
     + '<th style="padding:.8rem .4rem;color:#fff !important;background:#5b6a86 !important;border:none;text-align:center;font-size:.8rem">หลัก</th>'
     + '<th style="padding:.8rem .4rem;color:#fff !important;background:#5b6a86 !important;border:none;text-align:center;font-size:.8rem">รอง</th>'
     + '<th style="padding:.8rem .4rem;color:#fff !important;background:#5b6a86 !important;border:none;text-align:center;font-size:.8rem">D</th>'
@@ -601,14 +614,15 @@ function filterHrTable() {
   if (!tbody) return;
   var shown = 0;
   var bodyHtml = rows.map(function(r, idx){
-    var nm = (r.name || "").toLowerCase();
+    var nm = String(r.name == null ? "" : r.name).toLowerCase();
     if (q && nm.indexOf(q) === -1) return "";
     if (pf !== "ALL" && r.primary !== pf) return "";
     shown++;
     var pColor = (DISC[r.primary] ? DISC[r.primary].color : "#5b6a86");
     var tds = "";
     tds += '<td class="hrtd" style="white-space:nowrap;font-size:.84rem;color:#7d7f75">' + (r.time||"") + '</td>';
-    tds += '<td class="hrtd"><a href="#" onclick="showHrDetail(' + idx + ');return false" style="color:#4c4543;font-weight:700;text-decoration:none;border-bottom:1px dashed #b0c5bc">' + (r.name||"(ไม่ระบุ)") + '</a></td>';
+    tds += '<td class="hrtd"><a href="#" onclick="showHrDetail(' + idx + ');return false" style="color:#4c4543;font-weight:700;text-decoration:none;border-bottom:1px dashed #b0c5bc">' + String(r.name==null||r.name===""?"(ไม่ระบุ)":r.name) + '</a></td>';
+    tds += '<td class="hrtd" style="font-size:.84rem;color:#4c4543">' + String(r.position==null||r.position===""?"-":r.position) + '</td>';
     tds += '<td class="hrtd" style="text-align:center"><span style="display:inline-block;min-width:26px;background:' + pColor + ';color:#fff;border-radius:6px;padding:.15rem .4rem;font-weight:700;font-size:.85rem">' + (r.primary||"") + '</span></td>';
     tds += '<td class="hrtd" style="text-align:center;color:#7d7f75;font-weight:600">' + (r.secondary||"") + '</td>';
     tds += '<td class="hrtd" style="text-align:center;font-size:.85rem">' + fmt(r.D) + '</td>';
@@ -620,7 +634,7 @@ function filterHrTable() {
       + '</td>';
     return '<tr class="hrrow">' + tds + '</tr>';
   }).join("");
-  tbody.innerHTML = bodyHtml || '<tr><td colspan="9" style="padding:2rem;text-align:center;color:#94a3b8">ไม่พบผู้สมัครที่ตรงกับคำค้นหา</td></tr>';
+  tbody.innerHTML = bodyHtml || '<tr><td colspan="10" style="padding:2rem;text-align:center;color:#94a3b8">ไม่พบผู้สมัครที่ตรงกับคำค้นหา</td></tr>';
   var cp = document.getElementById("hrCount");
   if (cp) {
     if (q) cp.textContent = 'พบ ' + shown + ' จาก ' + rows.length + ' คน';
@@ -631,10 +645,10 @@ function filterHrTable() {
 function exportHrCsv() {
   var rows = window.__hrRows || [];
   if (!rows.length) return;
-  var header = ["เวลา","ชื่อ-นามสกุล","บุคลิกหลัก","บุคลิกรอง","D","I","S","C"];
+  var header = ["เวลา","ชื่อ-นามสกุล","ตำแหน่ง","บุคลิกหลัก","บุคลิกรอง","D","I","S","C"];
   var lines = [header];
   rows.forEach(function(r){
-    lines.push([r.time||"", r.name||"", r.primary||"", r.secondary||"", r.D, r.I, r.S, r.C]);
+    lines.push([r.time||"", r.name||"", r.position||"", r.primary||"", r.secondary||"", r.D, r.I, r.S, r.C]);
   });
   var csv = lines.map(function(row){
     return row.map(function(c){ return '"' + String(c).replace(/"/g,'""') + '"'; }).join(",");
@@ -708,11 +722,18 @@ function showHrDetail(idx) {
     modal.style.cssText = "position:fixed;inset:0;background:rgba(30,30,40,0.55);display:flex;align-items:center;justify-content:center;z-index:9999;padding:1rem";
     document.body.appendChild(modal);
   }
+  var nmDisp = String(r.name==null||r.name===""?"(ไม่ระบุชื่อ)":r.name);
+  var posDisp = String(r.position==null||r.position===""?"-":r.position);
   modal.innerHTML = '<div style="background:#fff;border-radius:16px;max-width:520px;width:100%;max-height:90vh;overflow-y:auto;padding:1.75rem;box-shadow:0 20px 60px rgba(0,0,0,0.3)">'
     + '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:1rem">'
-    + '<div><h2 style="margin:0;font-size:1.25rem;color:#4c4543">'+(r.name||'(ไม่ระบุชื่อ)')+'</h2>'
-    + '<p style="margin:.2rem 0 0;font-size:.8rem;color:#94a3b8">ทำเมื่อ '+(r.time||'-')+'</p></div>'
+    + '<div style="display:flex;gap:.6rem;flex-wrap:wrap">'
+    + '<button onclick="exportDetail(\'png\')" style="background:#4f46e5;color:#fff;border:none;border-radius:8px;padding:.45rem .9rem;font-size:.82rem;font-weight:700;cursor:pointer">⬇ PNG</button>'
+    + '<button onclick="exportDetail(\'pdf\')" style="background:#7c3aed;color:#fff;border:none;border-radius:8px;padding:.45rem .9rem;font-size:.82rem;font-weight:700;cursor:pointer">⬇ PDF</button></div>'
     + '<button onclick="closeHrModal()" style="background:#f1f5f9;border:none;border-radius:8px;width:32px;height:32px;cursor:pointer;font-size:1.1rem;color:#64748b">✕</button></div>'
+    + '<div id="hrDetailCapture" style="background:#fff;padding:.25rem">'
+    + '<h2 style="margin:0;font-size:1.25rem;color:#4c4543">'+nmDisp+'</h2>'
+    + '<p style="margin:.2rem 0 .1rem;font-size:.9rem;color:#5b6a86;font-weight:600">ตำแหน่งที่สมัคร: '+posDisp+'</p>'
+    + '<p style="margin:.1rem 0 0;font-size:.8rem;color:#94a3b8">ทำเมื่อ '+(r.time||'-')+'</p>'
     + '<div style="background:'+DISC[primary].color+'15;border:1px solid '+DISC[primary].color+'40;border-radius:12px;padding:1rem 1.2rem;margin-bottom:1rem">'
     + '<div style="display:flex;align-items:center;gap:.6rem;flex-wrap:wrap">'
     + '<span style="background:'+DISC[primary].color+';color:#fff;width:44px;height:44px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:1.3rem;font-weight:800">'+primary+'</span>'
@@ -722,8 +743,29 @@ function showHrDetail(idx) {
     + '<h3 style="font-size:1rem;margin:1rem 0 .75rem;color:#4c4543">กราฟคะแนน DISC (Most − Least)</h3>'+bars
     + '<h3 style="font-size:1rem;margin:1.25rem 0 .5rem;color:#4c4543">ตารางคะแนน</h3>'
     + '<table style="width:100%;border-collapse:collapse;font-size:.9rem"><tbody>'+tableRows+'</tbody></table>'
+    + '</div>'
     + '</div>';
+  window.__detailName = nmDisp;
   modal.onclick = function(e){ if (e.target === modal) closeHrModal(); };
+}
+
+function exportDetail(kind) {
+  var el = document.getElementById('hrDetailCapture');
+  if (!el || typeof html2canvas === 'undefined') { alert('ไม่สามารถสร้างไฟล์ได้ในขณะนี้'); return; }
+  var raw = String(window.__detailName || 'result');
+  var base = 'DISC_' + raw.replace(/[^\u0E00-\u0E7Fa-zA-Z0-9_-]+/g, '_').replace(/^_+|_+$/g, '');
+  html2canvas(el, { scale: 2, backgroundColor: '#ffffff' }).then(function(canvas){
+    if (kind === 'png') {
+      var a = document.createElement('a'); a.download = base + '.png'; a.href = canvas.toDataURL('image/png'); a.click();
+    } else {
+      var img = canvas.toDataURL('image/png');
+      var JS = (window.jspdf && window.jspdf.jsPDF) ? window.jspdf.jsPDF : window.jsPDF;
+      var pdf = new JS({ orientation: 'portrait', unit: 'pt', format: 'a4' });
+      var pageW = pdf.internal.pageSize.getWidth(); var margin = 24; var imgW = pageW - margin*2;
+      var imgH = canvas.height * (imgW / canvas.width);
+      pdf.addImage(img, 'PNG', margin, margin, imgW, imgH); pdf.save(base + '.pdf');
+    }
+  }).catch(function(e){ console.error(e); alert('สร้างไฟล์ไม่สำเร็จ: ' + (e && e.message ? e.message : e)); });
 }
 
 function closeHrModal() {
